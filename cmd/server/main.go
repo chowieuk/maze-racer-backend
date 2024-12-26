@@ -5,97 +5,133 @@ import (
 	"fmt"
 )
 
-type Type string
-type MyInterface interface {
-	Type() Type
+// WebSocket message types
+type MessageType string
+
+const (
+	// Client Requests
+	ReqJoinQueue    MessageType = "join_queue"
+	ReqLeaveQueue   MessageType = "leave_queue"
+	ReqEnterGame    MessageType = "enter_game"
+	ReqExitGame     MessageType = "exit_game"
+	ReqPlayerUpdate MessageType = "player_update"
+	// ReqPlayerReady   MessageType = "player_ready"
+
+	// Server Responses
+	RespGameState                MessageType = "game_state"
+	RespQueueJoined              MessageType = "queue_joined"
+	RespQueueLeft                MessageType = "queue_left"
+	RespGameConfirmed            MessageType = "game_confirmed"
+	RespPlayerEntered            MessageType = "player_entered"
+	RespPlayerExited             MessageType = "player_exited"
+	RespSecondsToNextRoundStart  MessageType = "secs_round_start"
+	RespSecondsToCurrentRoundEnd MessageType = "secs_next_round"
+	RespRoundResult              MessageType = "round_result"
+)
+
+// Message is the base interface that all messages must implement
+type Message interface {
+	Type() MessageType
 }
 
-type StructA struct {
-	A float64 `json:"a"`
-}
-type StructB struct {
-	B string `json:"b"`
-}
-type StructX struct {
-	X           string      `json:"x"`
-	MyInterface MyInterface `json:"my_interface"`
+// TypedMessage adds type safety to message parsing
+type TypedMessage[T Message] struct {
+	MessageType MessageType     `json:"messageType"`
+	Payload     json.RawMessage `json:"payload"`
 }
 
-type StructXRAW struct {
-	X           string          `json:"x"`
-	MyInterface json.RawMessage `json:"my_interface"`
-}
-
-func (StructA) Type() Type {
-	return "StructA"
-}
-
-func (StructB) Type() Type {
-	return "StructB"
-}
-
-// Check that we have implemented the interface
-var _ MyInterface = (*StructA)(nil)
-var _ MyInterface = (*StructB)(nil)
-
-func (x StructX) MarshalJSON() ([]byte, error) {
-	var xr struct {
-		X               string      `json:"x"`
-		MyInterface     MyInterface `json:"my_interface"`
-		MyInterfaceType Type        `json:"my_interface_type"`
-	}
-	xr.X = x.X
-	xr.MyInterface = x.MyInterface
-	xr.MyInterfaceType = x.MyInterface.Type()
-	return json.Marshal(xr)
-}
-
-func (x *StructX) UnmarshalJSON(b []byte) error {
-	var xr struct {
-		X               string          `json:"x"`
-		MyInterface     json.RawMessage `json:"my_interface"`
-		MyInterfaceType Type            `json:"my_interface_type"`
-	}
-	err := json.Unmarshal(b, &xr)
+// CreateMessage creates a typed message from a Message
+func CreateMessage[T Message](msg T) (*TypedMessage[T], error) {
+	payload, err := json.Marshal(msg)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	x.X = xr.X
-	var myInterface MyInterface
-	if xr.MyInterfaceType == "StructA" {
-		myInterface = &StructA{}
-	} else {
-		myInterface = &StructB{}
+
+	return &TypedMessage[T]{
+		MessageType: msg.Type(),
+		Payload:     payload,
+	}, nil
+}
+
+// ParseMessage parses a message into its concrete type
+func ParseMessage[T Message](data []byte) (*T, error) {
+	var base TypedMessage[T]
+	if err := json.Unmarshal(data, &base); err != nil {
+		return nil, err
 	}
-	err = json.Unmarshal(xr.MyInterface, myInterface)
-	if err != nil {
-		return err
+
+	var msg T
+	if err := json.Unmarshal(base.Payload, &msg); err != nil {
+		return nil, err
 	}
-	x.MyInterface = myInterface
-	return nil
+
+	return &msg, nil
+}
+
+// Message implementations
+
+// JoinQueueMessage represents a client requesting to join a queue
+type JoinQueueMessage struct {
+	GameMode GameMode `json:"game_mode"`
+	Username string   `json:"name"`
+	Flag     string   `json:"flag"`
+}
+
+func (m JoinQueueMessage) Type() MessageType {
+	return ReqJoinQueue
+}
+
+// GameMode represents the available game modes
+type GameMode string
+
+const (
+	ModeSprint GameMode = "sprint"
+	ModeRace   GameMode = "race"
+)
+
+// Player represents a specific player entity in a game
+type Player struct {
+	Id       string   `json:"id"`
+	Active   bool     `json:"active"`
+	Name     string   `json:"name"`
+	Flag     string   `json:"flag"`
+	Level    int      `json:"level"`
+	Position Position `json:"position"`
+	Rotation float64  `json:"rotation"`
+}
+
+// Position represents the position of the sprite for a player
+type Position struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
 }
 
 func main() {
-	// Create an instance of each a turn to JSON
-	xa := StructX{X: "xyz", MyInterface: StructA{A: 1.23}}
-	xb := StructX{X: "xyz", MyInterface: StructB{B: "hello"}}
+	// Creating a message
+	joinMsg := JoinQueueMessage{
+		GameMode: ModeSprint,
+		Username: "Test Player 1",
+		Flag:     "🏳️",
+	}
 
-	xaJSON, _ := json.Marshal(xa)
-	xbJSON, _ := json.Marshal(xb)
-	println(string(xaJSON))
-	println(string(xbJSON))
-
-	var newX StructX
-	err := json.Unmarshal(xaJSON, &newX)
+	// Create the typed message
+	typedMsg, err := CreateMessage(joinMsg)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%+v %T\n", newX.MyInterface, newX.MyInterface)
 
-	var newY StructX
-	err = json.Unmarshal(xbJSON, &newY)
+	// Marshal for transmission
+	data, err := json.Marshal(typedMsg)
 	if err != nil {
 		panic(err)
 	}
-	fmt.Printf("%+v %T\n", newY.MyInterface, newY.MyInterface)
+
+	// Parse back into concrete type - no type assertion needed!
+	parsed, err := ParseMessage[JoinQueueMessage](data)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("Received data: %s\nMessageType %T\nParsed: %+v\n", data, parsed, parsed)
+
 }
