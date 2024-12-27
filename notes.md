@@ -2,9 +2,9 @@
 
 - [x] sketch out game UX
 - [x] sketch out API and data flow
-- [ ] sketch out backend game state and entity modeling
-- [ ] POC server working locally
+- [x] sketch out backend game state and entity modeling
 - [ ] breakup server into file components
+- [ ] POC server working locally
 - [ ] add new stub message handlers to client
 - [ ] add new stub message handlers to server
 - [ ] add new client message classes to client
