@@ -62,7 +62,7 @@ func ParseMessage[T Message](base BaseMessage) (*T, error) {
 	// Handle empty payload case
 	if len(base.Payload) == 0 || string(base.Payload) == "null" {
 		if msg.RequiresPayload() {
-			return nil, fmt.Errorf("payload required for message type %T", msg)
+			return nil, PayloadRequiredError{MessageType: base.Type}
 		}
 		return &msg, nil
 	}
@@ -71,14 +71,12 @@ func ParseMessage[T Message](base BaseMessage) (*T, error) {
 	decoder.DisallowUnknownFields()
 
 	if err := decoder.Decode(&msg); err != nil {
-		return nil, fmt.Errorf("invalid format for %T message payload: %s\n%w", msg, base.Payload, err)
+		return nil, PayloadFormatError{MessageType: base.Type, Err: err}
 	}
 
 	// Validate after decoding
-	if validator, ok := any(msg).(interface{ Validate() error }); ok {
-		if err := validator.Validate(); err != nil {
-			return nil, fmt.Errorf("validation failed for %+v: %+v", msg, err)
-		}
+	if err := msg.Validate(); err != nil {
+		return nil, err
 	}
 
 	return &msg, nil
@@ -99,12 +97,32 @@ func (m JoinQueueRequest) Type() MessageType {
 
 func (m JoinQueueRequest) Validate() error {
 	if m.Username == "" {
-		return fmt.Errorf("username cannot be empty")
+		return ValidationError{
+			MessageType: ReqJoinQueue,
+			Field:       "username",
+			Reason:      "cannot be empty",
+		}
+
 	}
 	if m.GameMode == "" {
-		return fmt.Errorf("game mode cannot be empty")
+		return ValidationError{
+			MessageType: ReqJoinQueue,
+			Field:       "game_mode",
+			Reason:      "cannot be empty",
+		}
 	}
-	return nil
+
+	switch m.GameMode {
+	case ModeSprint, ModeRace:
+		return nil
+	default:
+		return ValidationError{
+			MessageType: ReqJoinQueue,
+			Field:       "game_mode",
+			Reason:      fmt.Sprintf("must be one of: %v, %v", ModeSprint, ModeRace),
+		}
+	}
+
 }
 
 func (m JoinQueueRequest) RequiresPayload() bool { return true }
@@ -142,3 +160,31 @@ func (m PlayerUpdateRequest) Validate() error {
 }
 
 func (m PlayerUpdateRequest) RequiresPayload() bool { return true }
+
+// Message-related errors
+type ValidationError struct {
+	MessageType MessageType
+	Field       string
+	Reason      string
+}
+
+func (e ValidationError) Error() string {
+	return fmt.Sprintf("validation failed for %s: %s %s", e.MessageType, e.Field, e.Reason)
+}
+
+type PayloadRequiredError struct {
+	MessageType MessageType
+}
+
+func (e PayloadRequiredError) Error() string {
+	return fmt.Sprintf("payload required for message type %s", e.MessageType)
+}
+
+type PayloadFormatError struct {
+	MessageType MessageType
+	Err         error
+}
+
+func (e PayloadFormatError) Error() string {
+	return fmt.Sprintf("invalid format for %s message payload: %v", e.MessageType, e.Err)
+}
