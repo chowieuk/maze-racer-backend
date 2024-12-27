@@ -285,4 +285,8 @@ func TestConcurrentMap(t *testing.T) {
 		testCMap(t, m)
 	})
 
+	t.Run("syncMap", func(t *testing.T) {
+		m := NewSyncMap[string, int]()
+		testCMap(t, m)
+	})
 }

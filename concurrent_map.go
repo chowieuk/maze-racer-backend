@@ -3,7 +3,7 @@ package main
 import "sync"
 
 // CMap is intended to be a thread-safe map implementation.
-// Implementations must ensure all methods are safe for mutex access.
+// Implementations must ensure all methods are safe for concurrent access.
 type CMap[K comparable, V any] interface {
 	// sync.Locker // constrain to implementations using Lock() and Unlock()
 	Set(key K, value V)
@@ -20,7 +20,7 @@ type mutexMap[K comparable, V any] struct {
 	data map[K]V
 }
 
-// NewMutexMap creates a new mutex map
+// NewmutexMap creates a new concurrent map
 func NewMutexMap[K comparable, V any]() CMap[K, V] {
 	return &mutexMap[K, V]{
 		data: make(map[K]V),
@@ -76,4 +76,50 @@ func (m *mutexMap[K, V]) Reset() {
 	for _, k := range m.Keys() {
 		m.Del(k)
 	}
+}
+
+// syncMap implements CMap via a wrapper around sync.Map
+type syncMap[K comparable, V any] struct {
+	sync.Map
+}
+
+func NewSyncMap[K comparable, V any]() CMap[K, V] {
+	return &syncMap[K, V]{}
+}
+
+func (sm *syncMap[K, V]) Set(key K, value V) {
+	sm.Store(key, value)
+}
+func (sm *syncMap[K, V]) Del(key K) {
+	sm.Delete(key)
+}
+
+func (sm *syncMap[K, V]) Get(key K) (V, bool) {
+	val, exists := sm.Load(key)
+	v, ok := val.(V)
+	return v, (ok && exists)
+}
+
+func (sm *syncMap[K, V]) Values() []V {
+	var values []V
+	sm.Range(func(_, value any) bool {
+		v, ok := value.(V)
+		values = append(values, v)
+		return ok
+	})
+	return values
+}
+
+func (sm *syncMap[K, V]) Keys() []K {
+	var keys []K
+	sm.Range(func(key, _ any) bool {
+		k, ok := key.(K)
+		keys = append(keys, k)
+		return ok
+	})
+	return keys
+}
+
+func (sm *syncMap[K, V]) Reset() {
+	sm.Clear()
 }
