@@ -1,6 +1,9 @@
 package main
 
-import "sync"
+import (
+	"encoding/json"
+	"sync"
+)
 
 // CMap is intended to be a thread-safe map implementation.
 // Implementations must ensure all methods are safe for concurrent access.
@@ -12,6 +15,7 @@ type CMap[K comparable, V any] interface {
 	Values() []V
 	Keys() []K
 	Reset()
+	MarshalJSON() ([]byte, error)
 }
 
 // mutexMap uses a sync RW Mutex to ensure thread safe read / writes
@@ -78,6 +82,10 @@ func (m *mutexMap[K, V]) Reset() {
 	}
 }
 
+func (m *mutexMap[K, V]) MarshalJSON() ([]byte, error) {
+	return json.Marshal(m.Values())
+}
+
 // syncMap implements CMap via a wrapper around sync.Map
 type syncMap[K comparable, V any] struct {
 	sync.Map
@@ -122,4 +130,8 @@ func (sm *syncMap[K, V]) Keys() []K {
 
 func (sm *syncMap[K, V]) Reset() {
 	sm.Clear()
+}
+
+func (sm *syncMap[K, V]) MarshalJSON() ([]byte, error) {
+	return json.Marshal(sm.Values())
 }
