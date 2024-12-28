@@ -1,6 +1,63 @@
 package main
 
-import "github.com/google/uuid"
+import (
+	"cmp"
+	"slices"
+
+	"github.com/google/uuid"
+)
+
+// GameState represents the state of a specific game
+type GameState struct {
+	Id      string               `json:"id"`
+	Seed    int64                `json:"seed"`
+	Players CMap[string, Player] `json:"players"`
+}
+
+// NewGameState initializes a thread-safe game instance with the given random seed.
+// The returned state includes a unique identifier and a concurrent-safe player registry.
+func NewGameState(seed int64) *GameState {
+	return &GameState{
+		Id:      uuid.New().String(),
+		Seed:    seed,
+		Players: NewMutexMap[string, Player](),
+	}
+}
+
+// GetRoundResult returns the end-of-round results containing player scores.
+// It collects scores from all players in the game state and sorts them
+// by level in descending order (highest level first).
+func (gs *GameState) GetRoundResult() RoundResult {
+	playerScores := make([]PlayerScore, 0, len(gs.Players.Values()))
+	for _, p := range gs.Players.Values() {
+		score := PlayerScore{
+			Username: p.Username,
+			Flag:     p.Flag,
+			Level:    p.Level,
+		}
+		playerScores = append(playerScores, score)
+	}
+	slices.SortFunc(playerScores,
+		func(a, b PlayerScore) int {
+			return cmp.Compare(b.Level, a.Level)
+		})
+
+	return RoundResult{
+		PlayerScores: playerScores,
+	}
+}
+
+// RoundResult represents the end of round results
+type RoundResult struct {
+	PlayerScores []PlayerScore `json:"playerScores"`
+}
+
+// PlayerScore represents an individual players end of round score
+type PlayerScore struct {
+	Username string `json:"username"`
+	Flag     string `json:"flag"`
+	Level    int    `json:"level"`
+}
 
 // Player represents a specific player entity in a game
 type Player struct {
