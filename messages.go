@@ -122,7 +122,7 @@ func (m LeaveQueueRequest) Validate() error {
 
 func (m LeaveQueueRequest) RequiresPayload() bool { return false }
 
-// LeaveQueueMessage represents a client requesting to leave a queue
+// PlayerUpdateRequest represents a player requesting to update their state
 type PlayerUpdateRequest struct {
 	Level    int      `json:"level"`
 	Position Position `json:"position"`
