@@ -27,18 +27,6 @@ func TestNewPlayer(t *testing.T) {
 	assert.NotEmpty(t, player.Id)
 }
 
-func TestNewPlayerFromRequest(t *testing.T) {
-	req := JoinQueueRequest{
-		Username: "testUser",
-		Flag:     "🏴",
-	}
-
-	player := NewPlayerFromRequest(req)
-
-	assert.Equal(t, req.Username, player.Username)
-	assert.Equal(t, req.Flag, player.Flag)
-}
-
 func TestGameStateMarshalling(t *testing.T) {
 
 	// Set up a deterministic rng for UUID and maze generation

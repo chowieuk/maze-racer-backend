@@ -9,9 +9,9 @@ import (
 
 // GameState represents the state of a specific game
 type GameState struct {
-	Id      string               `json:"id"`
-	Seed    int64                `json:"seed"`
-	Players CMap[string, Player] `json:"players"`
+	Id      string                `json:"id"`
+	Seed    int64                 `json:"seed"`
+	Players CMap[string, *Player] `json:"players"`
 }
 
 // NewGameState initializes a thread-safe game instance with the given random seed.
@@ -20,7 +20,7 @@ func NewGameState(seed int64) *GameState {
 	return &GameState{
 		Id:      uuid.New().String(),
 		Seed:    seed,
-		Players: NewMutexMap[string, Player](),
+		Players: NewMutexMap[string, *Player](),
 	}
 }
 
@@ -77,8 +77,8 @@ type Position struct {
 }
 
 // Creates a new player
-func NewPlayer(username, flag string) Player {
-	return Player{
+func NewPlayer(username, flag string) *Player {
+	return &Player{
 		Id:       uuid.New().String(),
 		Active:   false,
 		Username: username,
@@ -90,9 +90,4 @@ func NewPlayer(username, flag string) Player {
 		},
 		Rotation: 0,
 	}
-}
-
-// Creates a new player from a request
-func NewPlayerFromRequest(req JoinQueueRequest) Player {
-	return NewPlayer(req.Username, req.Flag)
 }

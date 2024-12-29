@@ -10,34 +10,30 @@ import (
 
 func TestParseMessage(t *testing.T) {
 	testCases := []struct {
-		name            string
-		input           []byte
-		expectedPayload interface{}
-		wantErr         bool
-		expectedError   string
+		name                string
+		input               []byte
+		expectedParseResult interface{}
+		wantErr             bool
+		expectedError       string
 	}{
 		{
 			name: "valid join queue request",
 			input: []byte(`{
 				"messageType": "join_queue",
 				"payload": {
-					"game_mode": "sprint",
-					"username": "Test Player",
-					"flag": "🏳️"
+					"game_mode": "sprint"
 				}
 			}`),
-			expectedPayload: &JoinQueueRequest{
+			expectedParseResult: &JoinQueueRequest{
 				GameMode: ModeSprint,
-				Username: "Test Player",
-				Flag:     "🏳️",
 			},
 			wantErr: false,
 		},
 		{
-			name:            "valid leave queue request",
-			input:           []byte(`{"messageType": "leave_queue"}`),
-			wantErr:         false,
-			expectedPayload: &LeaveQueueRequest{},
+			name:                "valid leave queue request",
+			input:               []byte(`{"messageType": "leave_queue"}`),
+			wantErr:             false,
+			expectedParseResult: &LeaveQueueRequest{},
 		},
 		{
 			name: "valid player update request",
@@ -49,7 +45,7 @@ func TestParseMessage(t *testing.T) {
 					"rotation": 45.0
 				}
 			}`),
-			expectedPayload: &PlayerUpdateRequest{
+			expectedParseResult: &PlayerUpdateRequest{
 				Level: 1,
 				Position: Position{
 					X: 1.0,
@@ -65,8 +61,8 @@ func TestParseMessage(t *testing.T) {
 				"messageType": "invalid",
 				"payload": {}
 			}`),
-			expectedPayload: nil,
-			wantErr:         true,
+			expectedParseResult: nil,
+			wantErr:             true,
 		},
 		{
 			name: "invalid player update payload",
@@ -76,25 +72,42 @@ func TestParseMessage(t *testing.T) {
 					"invalid" : "test"
 				}
 			}`),
-			expectedPayload: nil,
-			wantErr:         true,
+			expectedParseResult: nil,
+			wantErr:             true,
 		},
 		{
-			name: "missing payload",
+			name: "missing payload (update)",
 			input: []byte(`{
 				"messageType": "player_update"
 			}`),
-			expectedPayload: nil,
-			wantErr:         true,
+			expectedParseResult: nil,
+			wantErr:             true,
 		},
 		{
-			name: "empty payload",
+			name: "missing payload (leave)",
+			input: []byte(`{
+				"messageType": "leave_queue"
+			}`),
+			expectedParseResult: &LeaveQueueRequest{},
+			wantErr:             false,
+		},
+		{
+			name: "empty payload (update)",
 			input: []byte(`{
 				"messageType": "player_update", 
 				"payload": {}
 			}`),
-			expectedPayload: nil,
-			wantErr:         true,
+			expectedParseResult: nil,
+			wantErr:             true,
+		},
+		{
+			name: "empty payload (leave)",
+			input: []byte(`{
+				"messageType": "leave_queue", 
+				"payload": {}
+			}`),
+			expectedParseResult: &LeaveQueueRequest{},
+			wantErr:             false,
 		},
 	}
 
@@ -125,7 +138,7 @@ func TestParseMessage(t *testing.T) {
 				assert.Error(t, parseErr, "Expected an error but got none")
 			} else {
 				assert.NoError(t, parseErr, "Unexpected error")
-				assert.EqualValues(t, tc.expectedPayload, result)
+				assert.EqualValues(t, tc.expectedParseResult, result)
 			}
 		})
 	}

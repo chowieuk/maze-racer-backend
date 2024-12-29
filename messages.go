@@ -87,8 +87,6 @@ func ParseMessage[T Message](base BaseMessage) (*T, error) {
 // JoinQueueMessage represents a client requesting to join a queue
 type JoinQueueRequest struct {
 	GameMode GameMode `json:"game_mode"`
-	Username string   `json:"username"`
-	Flag     string   `json:"flag"`
 }
 
 func (m JoinQueueRequest) Type() MessageType {
@@ -96,22 +94,6 @@ func (m JoinQueueRequest) Type() MessageType {
 }
 
 func (m JoinQueueRequest) Validate() error {
-	if m.Username == "" {
-		return ValidationError{
-			MessageType: ReqJoinQueue,
-			Field:       "username",
-			Reason:      "cannot be empty",
-		}
-
-	}
-	if m.GameMode == "" {
-		return ValidationError{
-			MessageType: ReqJoinQueue,
-			Field:       "game_mode",
-			Reason:      "cannot be empty",
-		}
-	}
-
 	switch m.GameMode {
 	case ModeSprint, ModeRace:
 		return nil
