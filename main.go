@@ -174,11 +174,14 @@ func (g *Game) BroadcastState() {
 func (g *Game) broadcastMessage(message []byte) {
 	g.Clients.Iterate(func(client *Client, _ bool) bool {
 		select {
-		case client.send <- message:
-			// Message sent successfully
-		default:
-			// Channel is full, remove client
+		case <-client.ctx.Done():
 			g.Remove <- client
+		default:
+			select {
+			case client.send <- message:
+			default:
+				g.Remove <- client
+			}
 		}
 		return true
 	})
@@ -192,6 +195,8 @@ func (g *Game) RunListeners() {
 			return
 
 		case client := <-g.Add:
+
+			client.activeGame = g
 			g.Clients.Set(client, true)
 			client.player.Active = true
 			g.State.Players.Set(client.player.Id, client.player)
@@ -200,7 +205,6 @@ func (g *Game) RunListeners() {
 			if _, exists := g.Clients.Get(client); exists {
 				g.Clients.Del(client)
 				g.State.Players.Del(client.player.Id)
-				client.Cleanup()
 			}
 
 		case message := <-g.Broadcast:
@@ -221,16 +225,21 @@ type Client struct {
 	mm         *Matchmaker
 	ws         *websocket.Conn
 	send       chan []byte
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
 // NewClient instantiates a new client for a websocket connection
 func NewClient(ws *websocket.Conn, p *Player, mm *Matchmaker) *Client {
+	ctx, cancel := context.WithCancel(context.TODO())
 	c := &Client{
 		player:     p,
 		activeGame: nil,
 		mm:         mm,
 		ws:         ws,
 		send:       make(chan []byte, 256),
+		ctx:        ctx,
+		cancel:     cancel,
 	}
 	return c
 }
@@ -304,19 +313,32 @@ func (cl *Client) HandlePlayerUpdate(req *PlayerUpdateRequest) {
 
 // StartWriting starts the write pump for the client
 func (cl *Client) StartWriting() {
-	for message := range cl.send {
-		cl.ws.WriteMessage(1, message)
+	defer cl.ws.Close()
+	for {
+		select {
+		case <-cl.ctx.Done():
+			return
+		case message, ok := <-cl.send:
+			if !ok {
+				return
+			}
+			err := cl.ws.WriteMessage(websocket.TextMessage, message)
+			if err != nil {
+				return
+			}
+		}
 	}
 }
 
 func (cl *Client) Cleanup() {
+	cl.cancel()
 	if cl.activeGame != nil {
 		cl.activeGame.Remove <- cl
 		cl.activeGame = nil
 		cl.player.Active = false
 	}
-	cl.ws.Close()
 	close(cl.send)
+	cl.ws.Close()
 	fmt.Println("Cleaned up client: ", cl.player.Username)
 }
 
