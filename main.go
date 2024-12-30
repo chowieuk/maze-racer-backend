@@ -126,7 +126,7 @@ type Game struct {
 	tickrate  time.Duration
 	Mode      GameMode
 	State     *GameState
-	Clients   CMap[*Client, bool]
+	Clients   map[*Client]bool
 	Add       chan *Client
 	Remove    chan *Client
 	Broadcast chan []byte
@@ -143,7 +143,7 @@ func NewGame(mode GameMode, tickrate time.Duration) *Game {
 		tickrate:  tickrate,
 		Mode:      mode,
 		State:     NewGameState(123), // temporary seed
-		Clients:   NewMutexMap[*Client, bool](),
+		Clients:   make(map[*Client]bool),
 		Add:       make(chan *Client),
 		Remove:    make(chan *Client),
 		Broadcast: make(chan []byte),
@@ -172,7 +172,7 @@ func (g *Game) BroadcastState() {
 }
 
 func (g *Game) broadcastMessage(message []byte) {
-	g.Clients.Iterate(func(client *Client, _ bool) bool {
+	for client := range g.Clients {
 		select {
 		case <-client.ctx.Done():
 			g.Remove <- client
@@ -183,8 +183,7 @@ func (g *Game) broadcastMessage(message []byte) {
 				g.Remove <- client
 			}
 		}
-		return true
-	})
+	}
 }
 
 func (g *Game) RunListeners() {
@@ -197,13 +196,13 @@ func (g *Game) RunListeners() {
 		case client := <-g.Add:
 
 			client.activeGame = g
-			g.Clients.Set(client, true)
+			g.Clients[client] = true
 			client.player.Active = true
 			g.State.Players.Set(client.player.Id, client.player)
 
 		case client := <-g.Remove:
-			if _, exists := g.Clients.Get(client); exists {
-				g.Clients.Del(client)
+			if g.Clients[client] {
+				delete(g.Clients, client)
 				g.State.Players.Del(client.player.Id)
 			}
 
