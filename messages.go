@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+
+	"github.com/google/uuid"
 )
 
 // WebSocket message types
@@ -20,6 +22,7 @@ const (
 
 	// Server Responses
 	RespGameState                MessageType = "game_state"
+	RespConnectionConfirmation   MessageType = "connected"
 	RespQueueJoined              MessageType = "queue_joined"
 	RespQueueLeft                MessageType = "queue_left"
 	RespGameConfirmed            MessageType = "game_confirmed"
@@ -55,6 +58,17 @@ func CreateMessage[T Message](msg T) (*BaseMessage, error) {
 	}, nil
 }
 
+// CreateMessageBytes creates a []byte from a Message
+func CreateMessageBytes[T Message](msg T) ([]byte, error) {
+
+	bMsg, err := CreateMessage(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	return json.Marshal(bMsg)
+}
+
 // ParseMessage parses a message into its concrete type
 func ParseMessage[T Message](base BaseMessage) (*T, error) {
 	var msg T
@@ -83,6 +97,8 @@ func ParseMessage[T Message](base BaseMessage) (*T, error) {
 }
 
 // Message implementations
+
+// Request messagess
 
 // JoinQueueMessage represents a client requesting to join a queue
 type JoinQueueRequest struct {
@@ -134,14 +150,36 @@ func (m PlayerUpdateRequest) Type() MessageType {
 }
 
 func (m PlayerUpdateRequest) Validate() error {
-	if m.Level < 1 {
-		return fmt.Errorf("level must be greater than 0")
+	if m.Level < 0 {
+		return fmt.Errorf("level cannot be negative")
 	}
 	// TODO: add position and rotation validation as needed
 	return nil
 }
 
 func (m PlayerUpdateRequest) RequiresPayload() bool { return true }
+
+// Response Messages
+
+type ConnectedResponse struct {
+	PlayerID string `json:"player_id"`
+}
+
+func (m ConnectedResponse) Type() MessageType {
+	return RespConnectionConfirmation
+}
+
+func (m ConnectedResponse) Validate() error {
+
+	err := uuid.Validate(m.PlayerID)
+	if err != nil {
+		return fmt.Errorf("invalid player id")
+	}
+
+	return nil
+}
+
+func (m ConnectedResponse) RequiresPayload() bool { return true }
 
 // Message-related errors
 type ValidationError struct {
