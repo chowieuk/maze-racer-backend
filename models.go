@@ -2,6 +2,7 @@ package main
 
 import (
 	"cmp"
+	"encoding/json"
 	"slices"
 
 	"github.com/google/uuid"
@@ -22,6 +23,17 @@ func NewGameState(seed int64) *GameState {
 		Seed:    seed,
 		Players: NewMutexMap[string, *Player](),
 	}
+}
+
+// AsUpdateMessage Marshalls the current gamestate as JSON bytes
+func (gs *GameState) AsUpdateMessage() ([]byte, error) {
+	return json.Marshal(struct {
+		Type    MessageType `json:"messageType"`
+		Payload interface{} `json:"payload"`
+	}{
+		Type:    RespGameState,
+		Payload: gs,
+	})
 }
 
 // GetRoundResult returns the end-of-round results containing player scores.
