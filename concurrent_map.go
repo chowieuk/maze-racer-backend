@@ -15,6 +15,7 @@ type CMap[K comparable, V any] interface {
 	Values() []V
 	Keys() []K
 	Reset()
+	Iterate(func(K, V) bool)
 	MarshalJSON() ([]byte, error)
 }
 
@@ -82,6 +83,18 @@ func (m *mutexMap[K, V]) Reset() {
 	}
 }
 
+// Iterate blocks while iterating over all key value pairs
+func (m *mutexMap[K, V]) Iterate(fn func(K, V) bool) {
+	m.RLock()
+	defer m.RUnlock()
+
+	for k, v := range m.data {
+		if !fn(k, v) {
+			break
+		}
+	}
+}
+
 func (m *mutexMap[K, V]) MarshalJSON() ([]byte, error) {
 	return json.Marshal(m.Values())
 }
@@ -134,4 +147,12 @@ func (sm *syncMap[K, V]) Reset() {
 
 func (sm *syncMap[K, V]) MarshalJSON() ([]byte, error) {
 	return json.Marshal(sm.Values())
+}
+
+func (sm *syncMap[K, V]) Iterate(fn func(K, V) bool) {
+	sm.Range(func(key, value any) bool {
+		k, okK := key.(K)
+		v, okV := value.(V)
+		return fn(k, v) && okK && okV
+	})
 }
