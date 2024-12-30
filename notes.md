@@ -3,8 +3,8 @@
 - [x] sketch out game UX
 - [x] sketch out API and data flow
 - [x] sketch out backend game state and entity modeling
+- [x] POC server working locally
 - [ ] breakup server into file components
-- [ ] POC server working locally
 - [ ] add new stub message handlers to client
 - [ ] add new stub message handlers to server
 - [ ] add new client message classes to client
@@ -19,6 +19,9 @@
 
 - [ ] BUG:
 
+  - [ ] panic: send on closed channel - implement context?
+  - [ ] Messages is too broad - break into request and response?
+
 - [ ] implement full game features:
 
 INVESTIGATE:
@@ -26,8 +29,9 @@ INVESTIGATE:
 - load testing client connections
 - performance testing golang server performance
 - performance testing websocket message latency
+- performance testing different CMap implementations
 - ping/pong needed for clients that start to fail
-- look into a proper logging library
+- implement slog with zerolog or zap handler
 
 /////////// VERSUS MENU UX ///////////
 
