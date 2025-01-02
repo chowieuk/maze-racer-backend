@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/google/uuid"
 )
@@ -18,7 +19,7 @@ const (
 	ReqEnterGame    MessageType = "enter_game"
 	ReqExitGame     MessageType = "exit_game"
 	ReqPlayerUpdate MessageType = "player_update"
-	// ReqPlayerReady   MessageType = "player_ready"
+	ReqPlayerReady  MessageType = "player_ready"
 
 	// Server Responses
 	RespGameState                MessageType = "game_state"
@@ -26,6 +27,7 @@ const (
 	RespQueueJoined              MessageType = "queue_joined"
 	RespQueueLeft                MessageType = "queue_left"
 	RespGameConfirmed            MessageType = "game_confirmed"
+	RespGameCancelled            MessageType = "game_cancelled"
 	RespPlayerEntered            MessageType = "player_entered"
 	RespPlayerExited             MessageType = "player_exited"
 	RespSecondsToNextRoundStart  MessageType = "secs_round_start"
@@ -74,7 +76,7 @@ func ParseMessage[T Message](base BaseMessage) (*T, error) {
 	var msg T
 
 	// Handle empty payload case
-	if len(base.Payload) == 0 || string(base.Payload) == "null" {
+	if len(base.Payload) == 0 || string(base.Payload) == "null" || string(base.Payload) == "{}" {
 		if msg.RequiresPayload() {
 			return nil, PayloadRequiredError{MessageType: base.Type}
 		}
@@ -159,6 +161,18 @@ func (m PlayerUpdateRequest) Validate() error {
 
 func (m PlayerUpdateRequest) RequiresPayload() bool { return true }
 
+type PlayerReadyRequest struct{}
+
+func (m PlayerReadyRequest) Type() MessageType {
+	return ReqPlayerReady
+}
+
+func (m PlayerReadyRequest) Validate() error {
+	return nil
+}
+
+func (m PlayerReadyRequest) RequiresPayload() bool { return false }
+
 // Response Messages
 
 type ConnectedResponse struct {
@@ -187,6 +201,47 @@ type ValidationError struct {
 	Field       string
 	Reason      string
 }
+
+// ResponseMessage is for requests that don't yet implement Message interface
+type ResponseMessage struct {
+	MessageType MessageType `json:"messageType"`
+	Payload     interface{} `json:"payload"`
+}
+
+// CreateResponseBytes marshalls a given payload into a corresponding ResponseMessage
+// Doesn't ensure consistency between messageType and expected payload
+func CreateResponseBytes(messageType MessageType, payload interface{}) ([]byte, error) {
+	return json.Marshal(ResponseMessage{
+		MessageType: messageType,
+		Payload:     payload,
+	})
+}
+
+func MustCreateResponseBytes(messageType MessageType, payload interface{}) []byte {
+	bytes, err := CreateResponseBytes(messageType, payload)
+	if err != nil {
+		log.Panicln("fatal error creating response bytes: ", err)
+	}
+	return bytes
+}
+
+type QueueJoinedResponse struct {
+	Queue GameMode `json:"game_mode"`
+}
+
+type QueueLeftResponse struct {
+	Queue GameMode `json:"game_mode"`
+}
+
+type GameConfirmedResponse struct {
+	GameID string `json:"game_id"`
+}
+
+type PlayerExitedResponse struct {
+	GameID string `json:"game_id"`
+}
+
+// Message related errors
 
 func (e ValidationError) Error() string {
 	return fmt.Sprintf("validation failed for %s: %s %s", e.MessageType, e.Field, e.Reason)
