@@ -59,6 +59,17 @@ func (gs *GameState) GetRoundResult() RoundResult {
 	}
 }
 
+func (gs *GameState) AsRoundResultResponse() ([]byte, error) {
+	result := gs.GetRoundResult()
+	return json.Marshal(struct {
+		Type    MessageType `json:"messageType"`
+		Payload interface{} `json:"payload"`
+	}{
+		Type:    RespRoundResult,
+		Payload: result,
+	})
+}
+
 // RoundResult represents the end of round results
 type RoundResult struct {
 	PlayerScores []PlayerScore `json:"playerScores"`
