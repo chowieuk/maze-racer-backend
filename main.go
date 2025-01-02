@@ -177,7 +177,7 @@ func NewGame(mode GameMode, tickrate time.Duration) *Game {
 	return &Game{
 		id:            uuid.New().String(),
 		tickrate:      tickrate,
-		roundLength:   20 * time.Second,
+		roundLength:   60 * time.Second,
 		Mode:          mode,
 		State:         NewGameState(123), // temporary seed
 		Clients:       make(map[*Client]bool),
@@ -194,6 +194,20 @@ func (g *Game) BroadcastState() {
 	fmt.Printf("Game %v started\n", g.id)
 	ticker := time.NewTicker(g.tickrate)
 	roundTimer := time.NewTimer(g.roundLength)
+	startTime := time.Now()
+	g.State.StartTime = startTime.UnixMilli()
+
+	// Send initial state with start time
+	initialMsg, err := g.State.AsUpdateMessage()
+	if err != nil {
+		fmt.Println("error marshalling initial state: ", err)
+		return
+	}
+	g.Broadcast <- initialMsg
+
+	// Clear start time for subsequent updates
+	g.State.StartTime = 0
+
 	defer ticker.Stop()
 	defer roundTimer.Stop()
 

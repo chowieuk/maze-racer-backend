@@ -10,9 +10,10 @@ import (
 
 // GameState represents the state of a specific game
 type GameState struct {
-	Id      string                `json:"id"`
-	Seed    int64                 `json:"seed"`
-	Players CMap[string, *Player] `json:"players"`
+	Id        string                `json:"id"`
+	Seed      int64                 `json:"seed"`
+	Players   CMap[string, *Player] `json:"players"`
+	StartTime int64                 `json:"start_time_ms,omitempty"`
 }
 
 // NewGameState initializes a thread-safe game instance with the given random seed.
