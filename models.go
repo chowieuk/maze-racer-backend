@@ -12,6 +12,7 @@ import (
 type GameState struct {
 	Id        string                `json:"id"`
 	Seed      int64                 `json:"seed"`
+	MaxLevel  int                   `json:"max_level"`
 	Players   CMap[string, *Player] `json:"players"`
 	StartTime int64                 `json:"start_time_ms,omitempty"`
 }
@@ -20,9 +21,10 @@ type GameState struct {
 // The returned state includes a unique identifier and a concurrent-safe player registry.
 func NewGameState(seed int64) *GameState {
 	return &GameState{
-		Id:      uuid.New().String(),
-		Seed:    seed,
-		Players: NewMutexMap[string, *Player](),
+		Id:       uuid.New().String(),
+		Seed:     seed,
+		MaxLevel: 0,
+		Players:  NewMutexMap[string, *Player](),
 	}
 }
 
