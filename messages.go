@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"github.com/google/uuid"
 )
@@ -220,7 +220,8 @@ func CreateResponseBytes(messageType MessageType, payload interface{}) ([]byte, 
 func MustCreateResponseBytes(messageType MessageType, payload interface{}) []byte {
 	bytes, err := CreateResponseBytes(messageType, payload)
 	if err != nil {
-		log.Panicln("fatal error creating response bytes: ", err)
+		slog.Error("fatal error creating response bytes", "error", err)
+		panic(err)
 	}
 	return bytes
 }

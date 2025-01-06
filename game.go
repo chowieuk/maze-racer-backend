@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -131,7 +132,9 @@ func (g *BaseGame) broadcastResult() error {
 	}
 
 	g.Broadcast <- msg
-	fmt.Printf("Round over for game: %s\nResult: %v", g.id, result)
+	slog.Info("round completed", 
+		"game_id", g.id,
+		"result", result)
 
 	return nil
 }
@@ -147,7 +150,7 @@ func (g *BaseGame) broadcastUpdate() error {
 
 // BroadcastState starts the broadcasting - this is the public interface
 func (g *BaseGame) BroadcastState() {
-	fmt.Printf("Starting broadcast for game %v\n", g.id)
+	slog.Info("starting game broadcast", "game_id", g.id)
 	g.broadcaster.Start(g)
 }
 
@@ -179,7 +182,7 @@ func (g *BaseGame) RunListeners() {
 			}
 
 			if len(g.Clients) < 2 && countdownStarted {
-				fmt.Println("Game orphaned during countdown, sending remaining client a cancel message")
+				slog.Info("game orphaned during countdown, sending cancel message to remaining client")
 
 				msg := MustCreateResponseBytes(RespGameCancelled, struct{}{})
 
@@ -210,7 +213,7 @@ GamePhase:
 		case <-g.ctx.Done():
 			return
 		case client := <-g.add:
-			fmt.Print("client tried to join a running game: ", client)
+			slog.Warn("client attempted to join running game", "client", client)
 		case client := <-g.remove:
 			if g.Clients[client] {
 				delete(g.Clients, client)
@@ -219,7 +222,7 @@ GamePhase:
 				if len(g.Clients) < 2 {
 					// TODO: some kind of game aborted handler?
 					// TODO: what do we do with the final player?
-					fmt.Println("Game ended - insufficient players")
+					slog.Info("game ended due to insufficient players")
 
 					msg := MustCreateResponseBytes(RespGameCancelled, struct{}{})
 
@@ -256,7 +259,7 @@ func (g *BaseGame) CheckAllPlayersReady() bool {
 			return false
 		}
 	}
-	fmt.Println("Both players ready, adjusting countdown")
+	slog.Info("all players ready, adjusting countdown")
 	return true
 }
 
@@ -277,7 +280,7 @@ func (g *BaseGame) StartCountdown() {
 
 	countdown := defaultCountdown
 	ticker := time.NewTicker(time.Second)
-	fmt.Println("Starting countdown: ", defaultCountdown)
+	slog.Info("starting countdown", "duration", defaultCountdown)
 
 	go func() {
 		defer ticker.Stop()

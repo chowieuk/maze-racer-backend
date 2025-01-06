@@ -1,7 +1,7 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
 	"time"
 )
 
@@ -53,7 +53,7 @@ func (sb *SprintBroadcaster) Start(game *BaseGame) {
 
 	// Send initial state
 	if err := game.broadcastInitialState(); err != nil {
-		fmt.Println("error broadcasting initial state:", err)
+		slog.Error("failed to broadcast initial state", "error", err)
 		return
 	}
 
@@ -65,12 +65,12 @@ func (sb *SprintBroadcaster) Start(game *BaseGame) {
 			return
 		case <-roundTimer.C:
 			if err := game.broadcastResult(); err != nil {
-				fmt.Println("error broadcasting result:", err)
+				slog.Error("failed to broadcast result", "error", err)
 			}
 			return
 		case <-sb.ticker.C:
 			if err := game.broadcastUpdate(); err != nil {
-				fmt.Println("error broadcasting update:", err)
+				slog.Error("failed to broadcast update", "error", err)
 			}
 		}
 	}
@@ -96,7 +96,7 @@ func (rb *RaceBroadcaster) Start(game *BaseGame) {
 	game.State.StartTime = startTime.UnixMilli()
 
 	if err := game.broadcastInitialState(); err != nil {
-		fmt.Println("error broadcasting initial state:", err)
+		slog.Error("failed to broadcast initial state", "error", err)
 		return
 	}
 
@@ -109,12 +109,12 @@ func (rb *RaceBroadcaster) Start(game *BaseGame) {
 		case <-rb.ticker.C:
 			if game.State.MaxLevel > rb.levelTarget {
 				if err := game.broadcastResult(); err != nil {
-					fmt.Println("error broadcasting result:", err)
+					slog.Error("failed to broadcast result", "error", err)
 				}
 				return
 			}
 			if err := game.broadcastUpdate(); err != nil {
-				fmt.Println("error broadcasting update:", err)
+				slog.Error("failed to broadcast update", "error", err)
 			}
 		}
 	}
@@ -136,7 +136,7 @@ func (db *DefaultBroadcaster) Start(game *BaseGame) {
 	db.ticker = time.NewTicker(game.tickrate)
 	
 	if err := game.broadcastInitialState(); err != nil {
-		fmt.Println("error broadcasting initial state:", err)
+		slog.Error("failed to broadcast initial state", "error", err)
 		return
 	}
 
@@ -148,7 +148,7 @@ func (db *DefaultBroadcaster) Start(game *BaseGame) {
 			return
 		case <-db.ticker.C:
 			if err := game.broadcastUpdate(); err != nil {
-				fmt.Println("error broadcasting update:", err)
+				slog.Error("failed to broadcast update", "error", err)
 			}
 		}
 	}

@@ -4,12 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
+	"os"
 	"slices"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/rs/zerolog"
+	slogzerolog "github.com/samber/slog-zerolog"
 )
 
 // GameMode represents the available game modes
@@ -48,7 +51,9 @@ func (m *Matchmaker) AddToQueue(c *Client, mode GameMode) error {
 	case ModeSprint:
 
 		m.sprintQueue = append(m.sprintQueue, c)
-		fmt.Printf("added %s to %s queue\n", c.player.Username, mode)
+		slog.Info("added player to queue",
+			"player", c.player.Username,
+			"queue", mode)
 
 		queueJoined, err := CreateResponseBytes(RespQueueJoined, QueueJoinedResponse{
 			Queue: mode,
@@ -61,7 +66,9 @@ func (m *Matchmaker) AddToQueue(c *Client, mode GameMode) error {
 		c.send <- queueJoined
 
 		if len(m.sprintQueue) >= 2 {
-			fmt.Printf("Two clients in %v queue, creating new game\n", mode)
+			slog.Info("creating new game",
+				"queue", mode,
+				"players", 2)
 
 			client1 := m.sprintQueue[0]
 			client2 := m.sprintQueue[1]
@@ -82,7 +89,9 @@ func (m *Matchmaker) AddToQueue(c *Client, mode GameMode) error {
 	case ModeRace:
 
 		m.raceQueue = append(m.raceQueue, c)
-		fmt.Printf("added %s to %s queue\n", c.player.Username, mode)
+		slog.Info("added player to queue",
+			"player", c.player.Username,
+			"queue", mode)
 
 		queueJoined, err := CreateResponseBytes(RespQueueJoined, QueueJoinedResponse{
 			Queue: mode,
@@ -95,7 +104,9 @@ func (m *Matchmaker) AddToQueue(c *Client, mode GameMode) error {
 		c.send <- queueJoined
 
 		if len(m.raceQueue) >= 2 {
-			fmt.Printf("Two clients in %s queue, creating new game\n", mode)
+			slog.Info("creating new game",
+				"queue", mode,
+				"players", 2)
 
 			client1 := m.raceQueue[0]
 			client2 := m.raceQueue[1]
@@ -205,9 +216,9 @@ func (cl *Client) StartReading() {
 		_, msg, err := cl.ws.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure, websocket.CloseNoStatusReceived) {
-				fmt.Println("unexpected read error: ", err)
+				slog.Error("unexpected read error", "error", err)
 			} else {
-				fmt.Println("received close message: ", err)
+				slog.Info("received close message", "error", err)
 			}
 			break
 		}
@@ -215,7 +226,9 @@ func (cl *Client) StartReading() {
 		var bMsg BaseMessage
 		err = json.Unmarshal(msg, &bMsg)
 		if err != nil {
-			fmt.Printf("error unmarshalling %s: %v\n", msg, err)
+			slog.Error("error unmarshalling message",
+				"message", string(msg),
+				"error", err)
 			continue
 		}
 
@@ -223,7 +236,10 @@ func (cl *Client) StartReading() {
 		case ReqJoinQueue:
 			msg, err := ParseMessage[JoinQueueRequest](bMsg)
 			if err != nil {
-				fmt.Printf("error parsing %s, %s: %v\n", bMsg.Type, bMsg.Payload, err)
+				slog.Error("error parsing message",
+					"type", bMsg.Type,
+					"payload", string(bMsg.Payload),
+					"error", err)
 				continue
 			}
 			cl.HandleJoinQueue(msg)
@@ -231,7 +247,9 @@ func (cl *Client) StartReading() {
 		case ReqLeaveQueue:
 			msg, err := ParseMessage[LeaveQueueRequest](bMsg)
 			if err != nil {
-				fmt.Printf("error parsing %s: %v\n", bMsg.Type, err)
+				slog.Error("error parsing message",
+					"type", bMsg.Type,
+					"error", err)
 				continue
 			}
 			cl.HandleLeaveQueue(msg)
@@ -239,7 +257,9 @@ func (cl *Client) StartReading() {
 		case ReqPlayerUpdate:
 			msg, err := ParseMessage[PlayerUpdateRequest](bMsg)
 			if err != nil {
-				fmt.Printf("error parsing %s: %v\n", bMsg.Type, err)
+				slog.Error("error parsing message",
+					"type", bMsg.Type,
+					"error", err)
 				continue
 			}
 			cl.HandlePlayerUpdate(msg)
@@ -250,22 +270,22 @@ func (cl *Client) StartReading() {
 				fmt.Printf("error parsing %s: %v\n", bMsg.Type, err)
 				continue
 			}
-			fmt.Println("Received ready request")
+			slog.Info("received ready request")
 			cl.SetStatus(StatusReady)
 
 		default:
-			fmt.Printf("unknown message: %s\n", bMsg)
+			slog.Warn("received unknown message", "message", bMsg)
 		}
 
 	}
 }
 
 func (cl *Client) HandleJoinQueue(req *JoinQueueRequest) {
-	fmt.Println("Received join request: ", req.GameMode)
+	slog.Info("received join request", "gameMode", req.GameMode)
 	cl.mm.AddToQueue(cl, req.GameMode)
 }
 func (cl *Client) HandleLeaveQueue(req *LeaveQueueRequest) {
-	fmt.Println("Received leave request")
+	slog.Info("received leave request")
 	cl.mm.RemoveFromQueue(cl)
 }
 func (cl *Client) HandlePlayerUpdate(req *PlayerUpdateRequest) {
@@ -305,7 +325,7 @@ func (cl *Client) Cleanup() {
 	err := cl.mm.RemoveFromQueue(cl)
 
 	if err != nil {
-		fmt.Printf("err removing from queue: %v\n", err)
+		slog.Error("failed to remove client from queue", "error", err)
 	}
 
 	if cl.activeGame != nil {
@@ -326,7 +346,7 @@ func (cl *Client) Cleanup() {
 	}
 
 	cl.ws.Close()
-	fmt.Println("Cleaned up client: ", cl.player.Username)
+	slog.Info("cleaned up client", "player", cl.player.Username)
 }
 
 var upgrader = websocket.Upgrader{
@@ -352,7 +372,7 @@ func NewWebsocketHandler(mm *Matchmaker) func(w http.ResponseWriter, r *http.Req
 		// Upgrade HTTP connection to WebSocket
 		ws, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Printf("websocket upgrade error: %v", err)
+			slog.Error("websocket upgrade error", "error", err)
 			return
 		}
 
@@ -360,20 +380,22 @@ func NewWebsocketHandler(mm *Matchmaker) func(w http.ResponseWriter, r *http.Req
 		player := NewPlayer(playerName, playerFlag)
 		client := NewClient(ws, player, mm)
 
-		fmt.Printf("New connection: %v, %v\n", client.player.Username, client.player.Flag)
+		slog.Info("new connection",
+			"player", client.player.Username,
+			"flag", client.player.Flag)
 
 		resp, err := CreateMessageBytes(&ConnectedResponse{
 			PlayerID: player.Id,
 		})
 
 		if err != nil {
-			fmt.Println("error creating connection confirmation: ", err)
+			slog.Error("error creating connection confirmation", "error", err)
 		}
 
 		err = ws.WriteMessage(1, resp)
 
 		if err != nil {
-			fmt.Println("error writing connection confirmation: ", err)
+			slog.Error("error writing connection confirmation", "error", err)
 		}
 
 		// Start client routines
@@ -384,10 +406,24 @@ func NewWebsocketHandler(mm *Matchmaker) func(w http.ResponseWriter, r *http.Req
 }
 
 func main() {
+
+	// Initialize structured logging
+	zerologLogger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
+
+	logger := slog.New(slogzerolog.Option{Level: slog.LevelDebug, Logger: &zerologLogger}.NewZerologHandler())
+	logger = logger.
+		With("environment", "dev").
+		With("release", "v1.0.0")
+
+	slog.SetDefault(logger)
+
 	mm := NewMatchmaker(time.Second)
 	wsHandler := NewWebsocketHandler(mm)
 	http.HandleFunc("/ws", wsHandler)
 
-	fmt.Println("Listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	slog.Info("server starting", "port", 8080)
+	if err := http.ListenAndServe(":8080", nil); err != nil {
+		slog.Error("server failed", "error", err)
+		os.Exit(1)
+	}
 }
