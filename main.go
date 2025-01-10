@@ -10,6 +10,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 	slogzerolog "github.com/samber/slog-zerolog"
@@ -31,16 +32,19 @@ type Matchmaker struct {
 	raceQueue   []*Client
 	// Track active head-to-head games
 	headToHeadGames CMap[string, Game]
+	// Track active challenges
+	activeChallenges CMap[string, GameMode]
 }
 
 // NewMatchmaker creates a new matchmaker instance
 // All spawned games will use the provided tickrate
 func NewMatchmaker(tickrate time.Duration) *Matchmaker {
 	return &Matchmaker{
-		tickrate:        tickrate,
-		sprintQueue:     make([]*Client, 0),
-		raceQueue:       make([]*Client, 0),
-		headToHeadGames: NewMutexMap[string, Game](),
+		tickrate:         tickrate,
+		sprintQueue:      make([]*Client, 0),
+		raceQueue:        make([]*Client, 0),
+		headToHeadGames:  NewMutexMap[string, Game](),
+		activeChallenges: NewMutexMap[string, GameMode](),
 	}
 }
 
@@ -73,7 +77,7 @@ func (m *Matchmaker) AddToQueue(c *Client, mode GameMode) error {
 			client1 := m.sprintQueue[0]
 			client2 := m.sprintQueue[1]
 
-			game := NewSprintGame(m.tickrate, 60*time.Second)
+			game := NewSprintGame(m.tickrate, 10*time.Second)
 
 			go game.RunListeners()
 
@@ -162,6 +166,45 @@ func (m *Matchmaker) RemoveFromQueue(c *Client) error {
 	}
 
 	return fmt.Errorf("client not found in queue")
+}
+
+// CreateChallengeGame creates a challenge game and adds a player to it
+func (m *Matchmaker) CreateChallengeGame(c *Client, mode GameMode) error {
+	var game Game
+	switch mode {
+	case ModeSprint:
+		game = NewSprintGame(m.tickrate, 10*time.Second)
+	case ModeRace:
+		game = NewRaceGame(m.tickrate, 2)
+	default:
+		return fmt.Errorf("invalid game mode")
+	}
+	go game.RunListeners()
+	game.Add() <- c
+	m.activeChallenges.Set(game.GetID(), mode)
+	m.headToHeadGames.Set(game.GetID(), game)
+	createdMsg := MustCreateResponseBytes(RespChallengeCreated, ChallengeCreatedResponse{
+		ChallengeID: game.GetID(),
+	})
+	c.send <- createdMsg
+	return nil
+}
+
+// ChallengeActive responds true if a challenge is active
+func (m *Matchmaker) ChallengeActive(challengeID string) (GameMode, bool) {
+	return m.activeChallenges.Get(challengeID)
+}
+
+// AcceptChallenge adds a given client to a waiting challenge game
+func (m *Matchmaker) AcceptChallenge(c *Client, challengeID string) error {
+
+	if game, ok := m.headToHeadGames.Get(challengeID); !ok {
+		return fmt.Errorf("challenge id not found: %v", challengeID)
+	} else {
+		m.activeChallenges.Del(challengeID)
+		game.Add() <- c
+		return nil
+	}
 }
 
 // Client represents a connected websocket client
@@ -273,6 +316,28 @@ func (cl *Client) StartReading() {
 			slog.Info("received ready request")
 			cl.SetStatus(StatusReady)
 
+		case ReqCreateChallenge:
+			msg, err := ParseMessage[CreateChallengeRequest](bMsg)
+			if err != nil {
+				slog.Error("error parsing message",
+					"type", bMsg.Type,
+					"payload", string(bMsg.Payload),
+					"error", err)
+				continue
+			}
+			cl.HandleCreateChallenge(msg)
+
+		case ReqAcceptChallenge:
+			msg, err := ParseMessage[AcceptChallengeRequest](bMsg)
+			if err != nil {
+				slog.Error("error parsing message",
+					"type", bMsg.Type,
+					"payload", string(bMsg.Payload),
+					"error", err)
+				continue
+			}
+			cl.HandleAcceptChallenge(msg)
+
 		default:
 			slog.Warn("received unknown message", "message", bMsg)
 		}
@@ -284,10 +349,12 @@ func (cl *Client) HandleJoinQueue(req *JoinQueueRequest) {
 	slog.Info("received join request", "gameMode", req.GameMode)
 	cl.mm.AddToQueue(cl, req.GameMode)
 }
+
 func (cl *Client) HandleLeaveQueue(req *LeaveQueueRequest) {
 	slog.Info("received leave request")
 	cl.mm.RemoveFromQueue(cl)
 }
+
 func (cl *Client) HandlePlayerUpdate(req *PlayerUpdateRequest) {
 	cl.player.Level = req.Level
 	cl.player.Position = req.Position
@@ -297,7 +364,21 @@ func (cl *Client) HandlePlayerUpdate(req *PlayerUpdateRequest) {
 			cl.activeGame.SetMaxLevel(req.Level)
 		}
 	}
+}
 
+func (cl *Client) HandleCreateChallenge(req *CreateChallengeRequest) {
+	slog.Info("received create challenge request")
+	cl.mm.CreateChallengeGame(cl, req.GameMode)
+}
+
+func (cl *Client) HandleAcceptChallenge(req *AcceptChallengeRequest) {
+	slog.Info("received accept challenge request")
+	err := cl.mm.AcceptChallenge(cl, req.ChallengeID)
+	if err != nil {
+		slog.Warn("error accepting challenge", "error", err)
+		msg := MustCreateResponseBytes(RespChallengeStale, struct{}{})
+		cl.send <- msg
+	}
 }
 
 // StartWriting starts the write pump for the client
@@ -405,6 +486,30 @@ func NewWebsocketHandler(mm *Matchmaker) func(w http.ResponseWriter, r *http.Req
 	}
 }
 
+func NewChallengeHandler(mm *Matchmaker) func(w http.ResponseWriter, r *http.Request) {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract player information from query parameters
+		challengeID := r.URL.Query().Get("id")
+
+		// Validate required parameters
+		if err := uuid.Validate(challengeID); err != nil {
+			slog.Warn("invalid challenge accept request", "challengeID", challengeID)
+			http.Error(w, fmt.Sprintf("invalid or empty challenge id: %v", challengeID), http.StatusBadRequest)
+			return
+		}
+
+		if mode, ok := mm.ChallengeActive(challengeID); !ok {
+			slog.Warn("tried to accept inactive challenge", "challengeID", challengeID)
+			http.Error(w, fmt.Sprintf("challenge id no longer active: %v", challengeID), http.StatusBadRequest)
+			return
+		} else {
+			slog.Info("redirecting accept challenge request", "challengeID", challengeID)
+			http.Redirect(w, r, "http://localhost:5173/?challengeID="+challengeID+"&mode="+string(mode), http.StatusFound)
+		}
+	}
+}
+
 func main() {
 
 	// Initialize structured logging
@@ -412,14 +517,17 @@ func main() {
 
 	logger := slog.New(slogzerolog.Option{Level: slog.LevelDebug, Logger: &zerologLogger}.NewZerologHandler())
 	logger = logger.
-		With("environment", "dev").
 		With("release", "v1.0.0")
 
 	slog.SetDefault(logger)
 
 	mm := NewMatchmaker(time.Second)
+
 	wsHandler := NewWebsocketHandler(mm)
+	challengeHandler := NewChallengeHandler(mm)
+
 	http.HandleFunc("/ws", wsHandler)
+	http.HandleFunc("/challenge", challengeHandler)
 
 	slog.Info("server starting", "port", 8080)
 	if err := http.ListenAndServe(":8080", nil); err != nil {

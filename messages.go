@@ -14,12 +14,14 @@ type MessageType string
 
 const (
 	// Client Requests
-	ReqJoinQueue    MessageType = "join_queue"
-	ReqLeaveQueue   MessageType = "leave_queue"
-	ReqEnterGame    MessageType = "enter_game"
-	ReqExitGame     MessageType = "exit_game"
-	ReqPlayerUpdate MessageType = "player_update"
-	ReqPlayerReady  MessageType = "player_ready"
+	ReqJoinQueue       MessageType = "join_queue"
+	ReqLeaveQueue      MessageType = "leave_queue"
+	ReqEnterGame       MessageType = "enter_game"
+	ReqExitGame        MessageType = "exit_game"
+	ReqCreateChallenge MessageType = "create_challenge"
+	ReqAcceptChallenge MessageType = "accept_challenge"
+	ReqPlayerUpdate    MessageType = "player_update"
+	ReqPlayerReady     MessageType = "player_ready"
 
 	// Server Responses
 	RespGameState                MessageType = "game_state"
@@ -30,9 +32,12 @@ const (
 	RespGameCancelled            MessageType = "game_cancelled"
 	RespPlayerEntered            MessageType = "player_entered"
 	RespPlayerExited             MessageType = "player_exited"
+	RespChallengeCreated         MessageType = "challenge_created"
+	RespChallengeStale           MessageType = "challenge_stale"
 	RespSecondsToNextRoundStart  MessageType = "secs_round_start"
 	RespSecondsToCurrentRoundEnd MessageType = "secs_next_round"
 	RespRoundResult              MessageType = "round_result"
+	RespJoinRunningGame          MessageType = "error_game_running"
 )
 
 // Message is the base interface that all messages must implement
@@ -173,6 +178,48 @@ func (m PlayerReadyRequest) Validate() error {
 
 func (m PlayerReadyRequest) RequiresPayload() bool { return false }
 
+type CreateChallengeRequest struct {
+	GameMode GameMode `json:"game_mode"`
+}
+
+func (m CreateChallengeRequest) Type() MessageType {
+	return ReqCreateChallenge
+}
+
+func (m CreateChallengeRequest) Validate() error {
+	switch m.GameMode {
+	case ModeSprint, ModeRace:
+		return nil
+	default:
+		return ValidationError{
+			MessageType: ReqJoinQueue,
+			Field:       "game_mode",
+			Reason:      fmt.Sprintf("must be one of: %v, %v", ModeSprint, ModeRace),
+		}
+	}
+
+}
+
+func (m CreateChallengeRequest) RequiresPayload() bool { return true }
+
+type AcceptChallengeRequest struct {
+	ChallengeID string `json:"challenge_id"`
+}
+
+func (m AcceptChallengeRequest) Type() MessageType {
+	return ReqAcceptChallenge
+}
+
+func (m AcceptChallengeRequest) Validate() error {
+	err := uuid.Validate(m.ChallengeID)
+	if err != nil {
+		return fmt.Errorf("invalid player id")
+	}
+	return nil
+}
+
+func (m AcceptChallengeRequest) RequiresPayload() bool { return true }
+
 // Response Messages
 
 type ConnectedResponse struct {
@@ -236,6 +283,10 @@ type QueueLeftResponse struct {
 
 type GameConfirmedResponse struct {
 	GameID string `json:"game_id"`
+}
+
+type ChallengeCreatedResponse struct {
+	ChallengeID string `json:"challenge_id"`
 }
 
 type PlayerExitedResponse struct {

@@ -132,7 +132,7 @@ func (g *BaseGame) broadcastResult() error {
 	}
 
 	g.Broadcast <- msg
-	slog.Info("round completed", 
+	slog.Info("round completed",
 		"game_id", g.id,
 		"result", result)
 
@@ -214,6 +214,8 @@ GamePhase:
 			return
 		case client := <-g.add:
 			slog.Warn("client attempted to join running game", "client", client)
+			msg := MustCreateResponseBytes(RespJoinRunningGame, struct{}{})
+			client.send <- msg
 		case client := <-g.remove:
 			if g.Clients[client] {
 				delete(g.Clients, client)
