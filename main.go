@@ -77,16 +77,14 @@ func (m *Matchmaker) AddToQueue(c *Client, mode GameMode) error {
 			client1 := m.sprintQueue[0]
 			client2 := m.sprintQueue[1]
 
-			game := NewSprintGame(m.tickrate, 10*time.Second)
+			game := NewSprintGame(m.tickrate, 60*time.Second)
+			m.registerGame(game)
 
 			go game.RunListeners()
 
 			game.Add() <- client1
 			game.Add() <- client2
 
-			// go game.StartCountdown()
-
-			m.headToHeadGames.Set(game.GetID(), game)
 			m.sprintQueue = m.sprintQueue[2:]
 		}
 
@@ -115,16 +113,14 @@ func (m *Matchmaker) AddToQueue(c *Client, mode GameMode) error {
 			client1 := m.raceQueue[0]
 			client2 := m.raceQueue[1]
 
-			game := NewRaceGame(m.tickrate, 1)
+			game := NewRaceGame(m.tickrate, 10)
+			m.registerGame(game)
 
 			go game.RunListeners()
 
 			game.Add() <- client1
 			game.Add() <- client2
 
-			// go game.StartCountdown()
-
-			m.headToHeadGames.Set(game.GetID(), game)
 			m.raceQueue = m.raceQueue[2:]
 		}
 	default:
@@ -168,6 +164,19 @@ func (m *Matchmaker) RemoveFromQueue(c *Client) error {
 	return fmt.Errorf("client not found in queue")
 }
 
+// registerGame adds a game to the matchmaker and sets up context-based cleanup
+func (m *Matchmaker) registerGame(game Game) {
+	m.headToHeadGames.Set(game.GetID(), game)
+
+	// Start a goroutine that waits for the game's context to be cancelled
+	go func() {
+		<-game.Context().Done()
+		m.headToHeadGames.Del(game.GetID())
+		m.activeChallenges.Del(game.GetID())
+		slog.Info("removed game from matchmaker", "game_id", game.GetID())
+	}()
+}
+
 // CreateChallengeGame creates a challenge game and adds a player to it
 func (m *Matchmaker) CreateChallengeGame(c *Client, mode GameMode) error {
 	var game Game
@@ -179,10 +188,11 @@ func (m *Matchmaker) CreateChallengeGame(c *Client, mode GameMode) error {
 	default:
 		return fmt.Errorf("invalid game mode")
 	}
+
+	m.registerGame(game)
 	go game.RunListeners()
 	game.Add() <- c
 	m.activeChallenges.Set(game.GetID(), mode)
-	m.headToHeadGames.Set(game.GetID(), game)
 	createdMsg := MustCreateResponseBytes(RespChallengeCreated, ChallengeCreatedResponse{
 		ChallengeID: game.GetID(),
 	})
@@ -521,7 +531,7 @@ func main() {
 
 	slog.SetDefault(logger)
 
-	mm := NewMatchmaker(time.Second)
+	mm := NewMatchmaker(time.Second / 30)
 
 	wsHandler := NewWebsocketHandler(mm)
 	challengeHandler := NewChallengeHandler(mm)

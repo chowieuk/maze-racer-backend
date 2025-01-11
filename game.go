@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"time"
 
 	"github.com/google/uuid"
@@ -21,6 +22,7 @@ type Game interface {
 	SetMaxLevel(int)
 	Add() chan<- *Client
 	Remove() chan<- *Client
+	Context() context.Context
 	broadcastMessage([]byte)
 }
 
@@ -54,12 +56,13 @@ type BaseGame struct {
 
 // NewGame instantiates a new base game
 func NewGame(mode GameMode, tickrate time.Duration) *BaseGame {
+	seed := rand.Int64()
 	ctx, cancel := context.WithCancel(context.Background())
 	bg := &BaseGame{
 		id:            uuid.New().String(),
 		tickrate:      tickrate,
 		Mode:          mode,
-		State:         NewGameState(123), // temporary seed
+		State:         NewGameState(seed), // temporary seed
 		Clients:       make(map[*Client]bool),
 		add:           make(chan *Client),
 		remove:        make(chan *Client),
@@ -335,4 +338,8 @@ func (g *BaseGame) Add() chan<- *Client {
 
 func (g *BaseGame) Remove() chan<- *Client {
 	return g.remove
+}
+
+func (g *BaseGame) Context() context.Context {
+	return g.ctx
 }
