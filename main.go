@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -16,12 +18,18 @@ import (
 	slogzerolog "github.com/samber/slog-zerolog"
 )
 
+//go:embed dist/*
+var content embed.FS
+
 // GameMode represents the available game modes
 type GameMode string
 
 const (
-	ModeSprint GameMode = "sprint"
-	ModeRace   GameMode = "race"
+	ModeSprint        GameMode      = "sprint"
+	ModeRace          GameMode      = "race"
+	ServerTickrate    time.Duration = time.Second / 30
+	SprintRoundLength time.Duration = 60 * time.Second
+	RaceLevelTarget   int           = 10
 )
 
 // Matchmaker handles player queuing and game creation
@@ -77,7 +85,7 @@ func (m *Matchmaker) AddToQueue(c *Client, mode GameMode) error {
 			client1 := m.sprintQueue[0]
 			client2 := m.sprintQueue[1]
 
-			game := NewSprintGame(m.tickrate, 60*time.Second)
+			game := NewSprintGame(m.tickrate, SprintRoundLength)
 			m.registerGame(game)
 
 			go game.RunListeners()
@@ -113,7 +121,7 @@ func (m *Matchmaker) AddToQueue(c *Client, mode GameMode) error {
 			client1 := m.raceQueue[0]
 			client2 := m.raceQueue[1]
 
-			game := NewRaceGame(m.tickrate, 10)
+			game := NewRaceGame(m.tickrate, RaceLevelTarget)
 			m.registerGame(game)
 
 			go game.RunListeners()
@@ -182,9 +190,9 @@ func (m *Matchmaker) CreateChallengeGame(c *Client, mode GameMode) error {
 	var game Game
 	switch mode {
 	case ModeSprint:
-		game = NewSprintGame(m.tickrate, 10*time.Second)
+		game = NewSprintGame(m.tickrate, SprintRoundLength)
 	case ModeRace:
-		game = NewRaceGame(m.tickrate, 2)
+		game = NewRaceGame(m.tickrate, RaceLevelTarget)
 	default:
 		return fmt.Errorf("invalid game mode")
 	}
@@ -521,7 +529,6 @@ func NewChallengeHandler(mm *Matchmaker) func(w http.ResponseWriter, r *http.Req
 }
 
 func main() {
-
 	// Initialize structured logging
 	zerologLogger := zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr})
 
@@ -531,13 +538,24 @@ func main() {
 
 	slog.SetDefault(logger)
 
-	mm := NewMatchmaker(time.Second / 30)
+	// Strip the "dist" prefix and create a sub-filesystem
+	staticFS, err := fs.Sub(content, "dist")
+	if err != nil {
+		panic(err)
+	}
+
+	mm := NewMatchmaker(ServerTickrate)
 
 	wsHandler := NewWebsocketHandler(mm)
 	challengeHandler := NewChallengeHandler(mm)
 
+	// API routes first
 	http.HandleFunc("/ws", wsHandler)
 	http.HandleFunc("/challenge", challengeHandler)
+
+	// Then a file server for our static frontend
+	fileServer := http.FileServer(http.FS(staticFS))
+	http.Handle("/", fileServer)
 
 	slog.Info("server starting", "port", 8080)
 	if err := http.ListenAndServe(":8080", nil); err != nil {
