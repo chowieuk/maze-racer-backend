@@ -543,8 +543,20 @@ func main() {
 	challengeHandler := NewChallengeHandler(mm)
 
 	// API routes
-	http.HandleFunc("/ws", wsHandler)
-	http.HandleFunc("/challenge", challengeHandler)
+	http.HandleFunc("/api/ws", wsHandler)
+	http.HandleFunc("/api/challenge", challengeHandler)
+
+	// Health and Readiness
+
+	http.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		w.Write([]byte("ok"))
+	})
+
+	http.HandleFunc("/readyz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+		w.Write([]byte("ok"))
+	})
 
 	slog.Info("server starting", "port", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
