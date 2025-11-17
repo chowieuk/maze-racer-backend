@@ -36,12 +36,12 @@ jobs:
         with:
           repository: chowieuk/chowie-dev-config
           path: chowie-dev-config
-          ssh-key: ${{ secrets.CONFIG_REPO_PAT }}
+          token: ${{ secrets.CONFIG_REPO_PAT }}
 
       - name: Update Kubernetes manifest
         run: |
           # Note the path: we assume manifests are in apps/maze-racer
-          sed -i 's|image:.*|image: ghcr.io/chowieuk/chowie-dev@${{ steps.build-and-push.outputs.digest }}|' chowie-dev-config/apps/maze-racer/backend-deployment.yaml
+          sed -i 's|image:.*|image: ghcr.io/chowieuk/maze-racer-backend@${{ steps.build-and-push.outputs.digest }}|' chowie-dev-config/apps/maze-racer/backend-deployment.yaml
 
       - name: Commit and push changes
         run: |
