@@ -7,6 +7,8 @@
 *.dll
 *.so
 *.dylib
+/maze-racer
+/simple-maze-multiplayer
 
 # Test binary, built with `go test -c`
 *.test

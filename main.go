@@ -523,7 +523,7 @@ func NewChallengeHandler(mm *Matchmaker) func(w http.ResponseWriter, r *http.Req
 			return
 		} else {
 			slog.Info("redirecting accept challenge request", "challengeID", challengeID)
-			http.Redirect(w, r, "http://localhost:5173/?challengeID="+challengeID+"&mode="+string(mode), http.StatusFound)
+			http.Redirect(w, r, "/?challengeID="+challengeID+"&mode="+string(mode), http.StatusFound)
 		}
 	}
 }
@@ -537,6 +537,10 @@ func main() {
 		With("release", "v1.0.0")
 
 	slog.SetDefault(logger)
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "5000" // Default port if not specified
+	}
 
 	// Strip the "dist" prefix and create a sub-filesystem
 	staticFS, err := fs.Sub(content, "dist")
@@ -557,8 +561,8 @@ func main() {
 	fileServer := http.FileServer(http.FS(staticFS))
 	http.Handle("/", fileServer)
 
-	slog.Info("server starting", "port", 8080)
-	if err := http.ListenAndServe(":8080", nil); err != nil {
+	slog.Info("server starting", "port", port)
+	if err := http.ListenAndServe(":"+port, nil); err != nil {
 		slog.Error("server failed", "error", err)
 		os.Exit(1)
 	}

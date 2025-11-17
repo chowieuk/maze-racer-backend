@@ -122,7 +122,7 @@ func (g *BaseGame) broadcastInitialState() error {
 	g.Broadcast <- initialMsg
 
 	// Clear start time for subsequent updates
-	g.State.StartTime = 0
+	// g.State.StartTime = 0
 
 	return nil
 }

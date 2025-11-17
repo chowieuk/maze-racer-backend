@@ -1,0 +1,17 @@
+[Unit]
+Description=Maze racer backend service
+After=network.target
+
+[Service]
+ExecStart=/home/maze-racer/maze-racer
+
+Type=simple
+RemainAfterExit=yes
+
+StandardError=journal
+StandardOutput=journal
+
+KillMode=process
+Restart=on-failure
+[Install]
+WantedBy=default.target
