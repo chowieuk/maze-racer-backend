@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"embed"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -17,9 +15,6 @@ import (
 	"github.com/rs/zerolog"
 	slogzerolog "github.com/samber/slog-zerolog"
 )
-
-//go:embed dist/*
-var content embed.FS
 
 // GameMode represents the available game modes
 type GameMode string
@@ -542,24 +537,14 @@ func main() {
 		port = "5000" // Default port if not specified
 	}
 
-	// Strip the "dist" prefix and create a sub-filesystem
-	staticFS, err := fs.Sub(content, "dist")
-	if err != nil {
-		panic(err)
-	}
-
 	mm := NewMatchmaker(ServerTickrate)
 
 	wsHandler := NewWebsocketHandler(mm)
 	challengeHandler := NewChallengeHandler(mm)
 
-	// API routes first
+	// API routes
 	http.HandleFunc("/ws", wsHandler)
 	http.HandleFunc("/challenge", challengeHandler)
-
-	// Then a file server for our static frontend
-	fileServer := http.FileServer(http.FS(staticFS))
-	http.Handle("/", fileServer)
 
 	slog.Info("server starting", "port", port)
 	if err := http.ListenAndServe(":"+port, nil); err != nil {
