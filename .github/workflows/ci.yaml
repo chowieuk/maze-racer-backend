@@ -36,7 +36,7 @@ jobs:
         with:
           repository: chowieuk/chowie-dev-config
           path: chowie-dev-config
-          ssh-key: ${{ secrets.CONFIG_REPO_DEPLOY_KEY }}
+          ssh-key: ${{ secrets.CONFIG_REPO_PAT }}
 
       - name: Update Kubernetes manifest
         run: |
