@@ -211,9 +211,8 @@ func (m AcceptChallengeRequest) Type() MessageType {
 }
 
 func (m AcceptChallengeRequest) Validate() error {
-	err := uuid.Validate(m.ChallengeID)
-	if err != nil {
-		return fmt.Errorf("invalid player id")
+	if m.ChallengeID == "" {
+		return fmt.Errorf("received blank challenge id")
 	}
 	return nil
 }

@@ -58,7 +58,11 @@ type BaseGame struct {
 func NewGame(mode GameMode, tickrate time.Duration) *BaseGame {
 	seed := rand.Int64()
 	ctx, cancel := context.WithCancel(context.Background())
+<<<<<<< HEAD
 	id := gonanoid.Must()
+=======
+	id := gonanoid.Must(5)
+>>>>>>> e076235 (refactor: shortens challenge ids using nanoid)
 	bg := &BaseGame{
 		id:            id,
 		tickrate:      tickrate,

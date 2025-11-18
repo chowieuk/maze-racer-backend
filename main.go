@@ -169,6 +169,7 @@ func (m *Matchmaker) RemoveFromQueue(c *Client) error {
 // registerGame adds a game to the matchmaker and sets up context-based cleanup
 func (m *Matchmaker) registerGame(game Game) {
 	m.headToHeadGames.Set(game.GetID(), game)
+	slog.Info("added game to matchmaker", "game_id", game.GetID())
 
 	// Start a goroutine that waits for the game's context to be cancelled
 	go func() {
