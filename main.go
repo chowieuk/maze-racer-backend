@@ -534,7 +534,7 @@ func main() {
 	slog.SetDefault(logger)
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "5000" // Default port if not specified
+		port = "8080" // Default port if not specified
 	}
 
 	mm := NewMatchmaker(ServerTickrate)
