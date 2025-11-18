@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"slices"
 
-	"github.com/google/uuid"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 // GameState represents the state of a specific game
@@ -21,7 +21,7 @@ type GameState struct {
 // The returned state includes a unique identifier and a concurrent-safe player registry.
 func NewGameState(seed int64) *GameState {
 	return &GameState{
-		Id:       uuid.New().String(),
+		Id:       gonanoid.Must(5),
 		Seed:     seed,
 		MaxLevel: 0,
 		Players:  NewMutexMap[string, *Player](),
@@ -105,7 +105,7 @@ type Position struct {
 // Creates a new player
 func NewPlayer(username, flag string) *Player {
 	return &Player{
-		Id:       uuid.New().String(),
+		Id:       gonanoid.Must(5),
 		Active:   false,
 		Username: username,
 		Flag:     flag,

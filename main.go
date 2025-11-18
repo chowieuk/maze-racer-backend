@@ -10,7 +10,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/rs/zerolog"
 	slogzerolog "github.com/samber/slog-zerolog"
@@ -506,9 +505,9 @@ func NewChallengeHandler(mm *Matchmaker) func(w http.ResponseWriter, r *http.Req
 		challengeID := r.URL.Query().Get("id")
 
 		// Validate required parameters
-		if err := uuid.Validate(challengeID); err != nil {
+		if challengeID == "" {
 			slog.Warn("invalid challenge accept request", "challengeID", challengeID)
-			http.Error(w, fmt.Sprintf("invalid or empty challenge id: %v", challengeID), http.StatusBadRequest)
+			http.Error(w, fmt.Sprintf("empty challenge id: %v", challengeID), http.StatusBadRequest)
 			return
 		}
 

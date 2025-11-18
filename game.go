@@ -7,7 +7,7 @@ import (
 	"math/rand/v2"
 	"time"
 
-	"github.com/google/uuid"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 )
 
 type Game interface {
@@ -58,8 +58,9 @@ type BaseGame struct {
 func NewGame(mode GameMode, tickrate time.Duration) *BaseGame {
 	seed := rand.Int64()
 	ctx, cancel := context.WithCancel(context.Background())
+	id := gonanoid.Must()
 	bg := &BaseGame{
-		id:            uuid.New().String(),
+		id:            id,
 		tickrate:      tickrate,
 		Mode:          mode,
 		State:         NewGameState(seed), // temporary seed
